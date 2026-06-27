@@ -17,18 +17,17 @@
 
 ## Issue
 
-- public speedtest result pages embed `window.OOKLA.INIT_DATA` JSON with no auth
+- public speedtest result pages like [Ookla's speedtest.net](https://www.speedtest.net/result/19353244080) embed `window.OOKLA.INIT_DATA` JSON with no auth
 - result IDs opaque; no bulk export API
 
 - ❌ one-off lookups: can't build ISP/regional aggregates from manual page visits
 - ❌ third-party datasets: stale, licensed, or missing server/latency fields you need
 ❌ naive crawl: 403/rate limits on sequential IDs; gaps without checkpoint/resume
 
--> sweep backward from a known-good ID
--> parse embedded JSON into `jsonl`
--> filter/export with `query.py`
--> `data/` git-crypt at rest
-
+```text
+known-good ID --sweep.py--> jsonl --query.py--> filter|csv
+                  \___________ data/ (git-crypt) __________/
+```
 ## Setup
 
 ```bash
