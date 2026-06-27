@@ -1,38 +1,62 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/code.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/speedtest.webp" alt="logo" width="80" height="80" />
 </p>
 <h1 align="center">speedtests</h1>
-<p align="center"><em>terse tagline</em></p>
+<p align="center"><em>crawl public speedtest result pages → ISP intelligence map</em></p>
 
 ---
 
-<!-- (optional) visual -->
+![preview](https://res.cloudinary.com/ddyc1es5v/image/upload/v1782552753/gh-repos/speedtests/speedtests-preview.webp)
 
 ## Issue
 
-<!-- problem-first
-❌ failure mode clusters -->
+- public speedtest result pages embed `window.OOKLA.INIT_DATA` JSON with no auth
+- result IDs opaque; no bulk export API
+
+- ❌ one-off lookups: can't build ISP/regional aggregates from manual page visits
+- ❌ third-party datasets: stale, licensed, or missing server/latency fields you need
+❌ naive crawl: 403/rate limits on sequential IDs; gaps without checkpoint/resume
+
+-> sweep backward from a known-good ID
+-> parse embedded JSON into `jsonl`
+-> filter/export with `query.py`
+-> `data/` git-crypt at rest
 
 ## Setup
 
 ```bash
-chmod +x ./script.sh
+python3 --version   # stdlib only; sweep shells out to /usr/bin/curl
 ```
 
 ## Usage
 
 ```bash
-./script.sh https://svc.acme.dev/v1/7k2m9p4n-a8f3-4c71-b2e6-9d1a5f803c42
+OUTPUT=data/ookla_results.jsonl python3 sweep.py --start 19360616699 --count 50000
 ```
+
+```bash
+OUTPUT=data/ookla_results.jsonl python3 sweep.py --start 19360616699 --count 50000 --resume
+```
+
+```bash
+python3 query.py --input data/ookla_results.jsonl --isp Airtel
+python3 query.py --input data/ookla_results.jsonl --top 20
+python3 query.py --input data/ookla_results.jsonl --csv > airtel_export.csv
+```
+
+## Gotchas
+
+| symptom | fix | stability | why |
+|---|---|---|---|
+| 403 bursts | lower `RATE_S` or `--rate` | intermittent | speedtest.net edge throttle |
+| sparse hit rate | move `--start` to a fresher anchor ID | stable | not every sequential ID exists |
+| `data/` unreadable after clone | `git-crypt unlock ~/Downloads/git-crypt-key` | stable | path-scoped encryption in `.gitattributes` |
 
 ## Tools Used
 
-<!-- shields.io for-the-badge; one <img> per tool -->
-<img src="https://img.shields.io/badge/ToolName-HEX?style=for-the-badge&logo=LOGO&logoColor=white" alt="ToolName"/>
-
-<br/>
+<img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
 
 ## Contact
 
-<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png" alt="vd7.io" height="40" /></a>
-<a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png" alt="/vdutts7" height="40" /></a>
+[![vd7.io](https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png)](https://vd7.io)
+[![vdutts7 on X](https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png)](https://x.com/vdutts7)

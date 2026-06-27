@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speedtests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#020810;
+  --panel:rgba(2,8,22,0.96);
+  --surface2:#050f20;
+  --border:rgba(40,120,255,0.2);
+  /* blue spectrum - light=fast, dark=slow */
+  --t0:#e8f6ff; /* 500+  near-white */
+  --t1:#7ef0ff; /* 200+  bright cyan */
+  --t2:#2080ff; /* 50+   electric blue */
+  --t3:#0d3a8c; /* 10+   deep blue */
+  --t4:#0a1830; /* <10   near-black navy */
+  /* text - all above VIS-002 floor (#777) */
+  --text:#d0e4ff;
+  --sub:#99b8e0;   /* secondary - above floor */
+  --muted:#7a9cc0; /* muted floor - #7a = above #77 */
+  --dim:#6888b0;   /* dim - only for purely decorative */
+}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);
+  font-family:'Share Tech Mono',monospace;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,10,40,0.04) 2px,rgba(0,10,40,0.04) 4px)}
+
+#app{display:flex;height:100vh;width:100vw}
+
+/* ── SIDEBAR ── */
+#sidebar{
+  width:304px;min-width:304px;height:100%;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;z-index:500;
+}
+
+#header{padding:16px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.eyebrow{font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:4px}
+h1{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;
+  color:var(--t0);line-height:1.1;
+  text-shadow:0 0 24px rgba(126,240,255,0.5),0 0 48px rgba(32,128,255,0.25)}
+.sub{font-size:12px;color:var(--sub);margin-top:5px}
+
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--border);border-bottom:1px solid var(--border)}
+.kpi{background:var(--surface2);padding:10px 14px}
+.kv{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;line-height:1}
+.kl{font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:2px}
+.kpi.t0 .kv{color:var(--t0);text-shadow:0 0 14px rgba(232,246,255,0.4)}
+.kpi.t1 .kv{color:var(--t1);text-shadow:0 0 14px rgba(126,240,255,0.4)}
+.kpi.t2 .kv{color:var(--t2);text-shadow:0 0 14px rgba(32,128,255,0.5)}
+.kpi.t3 .kv{color:var(--t3)}
+
+#scroll{flex:1;overflow-y:auto;padding:14px 16px}
+#scroll::-webkit-scrollbar{width:3px}
+#scroll::-webkit-scrollbar-thumb{background:var(--t2);border-radius:1px}
+
+.sec{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;
+  color:var(--muted);margin:14px 0 8px;padding-bottom:5px;
+  border-bottom:1px solid var(--border)}
+.sec:first-child{margin-top:0}
+
+/* speed bars */
+.sp-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer}
+.sp-row:hover .sp-label{color:var(--text)}
+.sp-label{font-size:12px;color:var(--sub);width:58px;flex-shrink:0}
+.sp-wrap{flex:1;height:13px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden;position:relative}
+.sp-bar{height:100%;border-radius:2px;transition:opacity 0.2s}
+.sp-count{font-size:12px;color:var(--muted);width:28px;text-align:right;flex-shrink:0}
+.sp-row.active .sp-label{color:var(--t1)}
+.sp-row.active .sp-bar{box-shadow:0 0 8px currentColor}
+
+/* ISP rows */
+.isp-row{display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;
+  transition:background 0.15s;border-radius:3px}
+.isp-row:hover{background:rgba(32,128,255,0.06)}
+.isp-row.active{background:rgba(32,128,255,0.12)}
+.isp-row.active .isp-name{color:var(--t1)}
+.isp-logo{width:28px;height:28px;border-radius:7px;object-fit:cover;flex-shrink:0;
+  background:rgba(32,128,255,0.1);border:1px solid var(--border)}
+.isp-name{font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.isp-count{font-size:11px;color:var(--muted);flex-shrink:0}
+.isp-speed{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;
+  color:var(--t1);text-shadow:0 0 8px rgba(126,240,255,0.3);flex-shrink:0;width:70px;text-align:right}
+
+/* legend */
+.leg-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.leg-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);
+  cursor:pointer;padding:3px;border-radius:3px;transition:background 0.15s}
+.leg-item:hover{background:rgba(32,128,255,0.08)}
+.leg-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+
+/* active-filter pill */
+#filter-pill{
+  display:none;margin:8px 0;padding:5px 10px;
+  background:rgba(32,128,255,0.15);border:1px solid var(--t2);
+  border-radius:20px;font-size:11px;color:var(--t1);
+  cursor:pointer;text-align:center;letter-spacing:1px;
+}
+#filter-pill.visible{display:block}
+
+#footer{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
+#footer .ts{font-size:11px;color:var(--muted);letter-spacing:1px}
+#pd{display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--t1);margin-right:6px;animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 5px var(--t1)}50%{opacity:0.3;box-shadow:none}}
+
+/* ── MAP ── */
+#map-wrap{flex:1;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+
+/* VIS-001 fix: Positron (light) tiles on dark UI = contrast
+   Blue tint overlay achieves cyberpunk look WITHOUT luminance-collapse */
+.leaflet-tile-pane{
+  filter:grayscale(0.4) brightness(0.25) contrast(1.1);
+}
+#blue-overlay{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:rgba(5,15,60,0.55);
+  mix-blend-mode:multiply;
+}
+#vignette{
+  position:absolute;inset:0;z-index:3;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(2,8,20,0.6) 100%);
+}
+
+#hud{position:absolute;top:14px;right:14px;z-index:400;pointer-events:none;
+  text-align:right}
+.hl{font-size:11px;color:#6888b0;letter-spacing:1px;margin-bottom:2px}
+.hv{color:var(--t1);font-family:'Bebas Neue',sans-serif;font-size:13px}
+
+/* popup */
+.leaflet-popup-content-wrapper{
+  background:rgba(2,8,22,0.95)!important;
+  backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;
+  border:1px solid rgba(32,128,255,0.25)!important;
+  border-radius:8px!important;
+  box-shadow:0 8px 40px rgba(0,0,0,0.9),0 0 20px rgba(32,128,255,0.08)!important;
+}
+.leaflet-popup-tip{background:rgba(2,8,22,0.95)!important}
+.leaflet-popup-content{margin:14px 16px!important;font-family:'Share Tech Mono',monospace!important}
+.leaflet-control-attribution{background:rgba(2,8,20,0.75)!important;color:var(--dim)!important;font-size:10px!important}
+.leaflet-control-zoom a{
+  background:rgba(2,8,22,0.9)!important;color:var(--t1)!important;
+  border-color:var(--border)!important;font-size:16px!important}
+
+@keyframes ring{0%{transform:scale(1);opacity:0.85}100%{transform:scale(2.8);opacity:0}}
+.pr{animation:ring 2.8s ease-out infinite;position:absolute;inset:0;
+  border-radius:50%;border:1.5px solid currentColor}
+
+/* ── ISP DETAIL PANEL ── */
+#isp-panel{
+  position:fixed;bottom:0;left:304px;right:0;z-index:600;
+  transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.16,1,0.3,1);
+  background:rgba(2,8,22,0.97);
+  border-top:1px solid rgba(40,120,255,0.3);
+  backdrop-filter:blur(24px);
+  max-height:42vh;overflow-y:auto;
+}
+#isp-panel.open{transform:translateY(0)}
+#isp-panel::-webkit-scrollbar{height:3px;width:3px}
+#isp-panel::-webkit-scrollbar-thumb{background:var(--t2)}
+.isp-panel-inner{display:flex;gap:0;min-height:100%}
+.isp-panel-hero{
+  width:220px;min-width:220px;padding:20px;
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:10px;flex-shrink:0;
+  background:rgba(32,128,255,0.04);
+}
+.isp-panel-logo{width:48px;height:48px;border-radius:12px;object-fit:cover;
+  border:1px solid var(--border)}
+.isp-panel-name{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;
+  color:var(--t0);line-height:1;text-shadow:0 0 20px rgba(126,240,255,0.4)}
+.isp-panel-full{font-size:11px;color:var(--sub);line-height:1.4}
+.isp-asn-badge{display:inline-block;padding:2px 8px;background:rgba(32,128,255,0.15);
+  border:1px solid var(--t2);border-radius:10px;font-size:10px;color:var(--t1);
+  letter-spacing:1px;font-family:'Bebas Neue',sans-serif}
+.isp-known{font-size:11px;color:var(--sub);line-height:1.6;
+  border-top:1px solid var(--border);padding-top:8px;margin-top:4px}
+
+.isp-panel-stats{
+  flex:1;padding:16px 20px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;align-content:start;
+  overflow-y:auto;
+}
+.stat-block{background:rgba(32,128,255,0.05);border:1px solid var(--border);
+  border-radius:6px;padding:10px 12px}
+.stat-label{font-size:10px;color:var(--dim);letter-spacing:1.5px;margin-bottom:4px}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;
+  color:var(--t1);text-shadow:0 0 8px rgba(126,240,255,0.25);line-height:1}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:2px}
+
+.isp-panel-close{
+  position:absolute;top:12px;right:16px;
+  background:none;border:none;color:var(--muted);
+  font-size:18px;cursor:pointer;z-index:1;padding:4px 8px;
+  transition:color 0.15s
+}
+.isp-panel-close:hover{color:var(--text)}
+
+.ix-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.ix-tag{font-size:9px;padding:2px 7px;background:rgba(126,240,255,0.08);
+  border:1px solid rgba(126,240,255,0.2);border-radius:10px;color:var(--muted)}
+.policy-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;letter-spacing:1px}
+.policy-open{background:rgba(0,255,159,0.1);color:#00ff9f;border:1px solid rgba(0,255,159,0.3)}
+.policy-selective{background:rgba(32,128,255,0.1);color:var(--t1);border:1px solid var(--border)}
+.policy-restrictive{background:rgba(255,80,80,0.1);color:#ff6060;border:1px solid rgba(255,80,80,0.2)}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="sidebar">
+  <div id="header">
+    <h1>SPEEDTESTS</h1>
+    <div class="sub">Aggregated from public speedtest result pages</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi t0"><div class="kv">594</div><div class="kl">RESULTS</div></div>
+    <div class="kpi t1"><div class="kv">48</div><div class="kl">CITIES</div></div>
+    <div class="kpi t2"><div class="kv">225</div><div class="kl">AVG DL Mbps</div></div>
+    <div class="kpi t3"><div class="kv">3062</div><div class="kl">MAX DL Mbps</div></div>
+  </div>
+
+  <div id="scroll">
+
+    <div class="sec">SPEED DISTRIBUTION</div>
+    <div id="filter-pill" onclick="clearFilter()">✕ CLEAR FILTER</div>
+
+    <div class="sp-row" data-tier="0" onclick="filterTier(0)">
+      <div class="sp-label">500+</div>
+      <div class="sp-wrap"><div class="sp-bar" style="width:14.5%;background:var(--t0);box-shadow:0 0 10px var(--t0)"></div></div>
+      <div class="sp-count">86</div>
+    </div>
+    <div class="sp-row" data-tier="1" onclick="filterTier(1)">
+      <div class="sp-label">200-500</div>
+      <div class="sp-wrap"><div class="sp-bar" style="width:20.5%;background:var(--t1);box-shadow:0 0 8px var(--t1)"></div></div>
+      <div class="sp-count">122</div>
+    </div>
+    <div class="sp-row" data-tier="2" onclick="filterTier(2)">
+      <div class="sp-label">50-200</div>
+      <div class="sp-wrap"><div class="sp-bar" style="width:30.3%;background:var(--t2);box-shadow:0 0 6px var(--t2)"></div></div>
+      <div class="sp-count">180</div>
+    </div>
+    <div class="sp-row" data-tier="3" onclick="filterTier(3)">
+      <div class="sp-label">10-50</div>
+      <div class="sp-wrap"><div class="sp-bar" style="width:23.1%;background:var(--t3)"></div></div>
+      <div class="sp-count">137</div>
+    </div>
+    <div class="sp-row" data-tier="4" onclick="filterTier(4)">
+      <div class="sp-label">&lt; 10</div>
+      <div class="sp-wrap"><div class="sp-bar" style="width:11.6%;background:var(--t4);border:1px solid var(--t3)"></div></div>
+      <div class="sp-count">69</div>
+    </div>
+
+    <div class="sec">TOP ISPs BY VOLUME</div>
+
+    <div class="isp-row" data-isp="Airtel" onclick="filterISP('Airtel',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/airtel.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Airtel</div>
+      <div class="isp-count">25×</div><div class="isp-speed">91 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Vodafone" onclick="filterISP('Vodafone',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/vodafone.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Vodafone</div>
+      <div class="isp-count">20×</div><div class="isp-speed">230 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Orange" onclick="filterISP('Orange',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/orange.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Orange</div>
+      <div class="isp-count">15×</div><div class="isp-speed">281 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Claro" onclick="filterISP('Claro',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/claro.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Claro</div>
+      <div class="isp-count">14×</div><div class="isp-speed">288 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Jio" onclick="filterISP('Jio',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/jio.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Jio</div>
+      <div class="isp-count">13×</div><div class="isp-speed">68 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Vivo" onclick="filterISP('Vivo',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/vivo.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Vivo</div>
+      <div class="isp-count">12×</div><div class="isp-speed">252 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Movistar" onclick="filterISP('Movistar',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/movistar.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Movistar</div>
+      <div class="isp-count">11×</div><div class="isp-speed">304 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Verizon 5G Home Internet" onclick="filterISP('Verizon 5G Home Internet',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/verizon.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Verizon 5G</div>
+      <div class="isp-count">11×</div><div class="isp-speed">79 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="Telmex" onclick="filterISP('Telmex',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/telmex.webp" onerror="this.style.display='none'">
+      <div class="isp-name">Telmex</div>
+      <div class="isp-count">10×</div><div class="isp-speed">304 Mbps</div>
+    </div>
+    <div class="isp-row" data-isp="XFINITY" onclick="filterISP('XFINITY',this)">
+      <img class="isp-logo" src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/xfinity.webp" onerror="this.style.display='none'">
+      <div class="isp-name">XFINITY</div>
+      <div class="isp-count">9×</div><div class="isp-speed">514 Mbps</div>
+    </div>
+
+    <div class="sec">LEGEND - click to filter</div>
+    <div class="leg-grid">
+      <div class="leg-item" onclick="filterTier(0)">
+        <div class="leg-dot" style="background:var(--t0);box-shadow:0 0 8px var(--t0)"></div>≥ 500 Mbps
+      </div>
+      <div class="leg-item" onclick="filterTier(1)">
+        <div class="leg-dot" style="background:var(--t1);box-shadow:0 0 6px var(--t1)"></div>200-500
+      </div>
+      <div class="leg-item" onclick="filterTier(2)">
+        <div class="leg-dot" style="background:var(--t2);box-shadow:0 0 5px var(--t2)"></div>50-200
+      </div>
+      <div class="leg-item" onclick="filterTier(3)">
+        <div class="leg-dot" style="background:var(--t3)"></div>10-50
+      </div>
+      <div class="leg-item" onclick="filterTier(4)">
+        <div class="leg-dot" style="background:var(--t4);border:1px solid var(--t3)"></div>&lt; 10 Mbps
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.7">
+      Size = sample count<br>
+      Color = avg download speed<br>
+      Location = test server (region proxy)
+    </div>
+  </div>
+
+  <div id="footer">
+    <div class="ts"><span id="pd"></span>594 TESTS · 48 CITIES · WORLDWIDE</div>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <div id="map"></div>
+  <div id="blue-overlay"></div>
+  <div id="vignette"></div>
+  <div id="hud">
+    <div class="hl">TILE // CARTO POSITRON</div>
+    <div class="hl">PROJ // WGS84 MERCATOR</div>
+    <div class="hl">NODES // <span class="hv">48</span></div>
+    <div class="hl">RESULTS // <span class="hv">594</span></div>
+  </div>
+</div>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const ISP_REGISTRY = {"Airtel": {"asns": [9498, 24560], "full_name": "Bharti Airtel Limited", "type": "NSP", "traffic": "\u2014", "prefixes4": 45000, "prefixes6": 19000, "scope": "Regional", "policy": "Open", "ipv6": true, "ix_count": 19, "fac_count": 17, "ixs": ["NAPAfrica IX Johannesburg: Peering", "Equinix New York", "IX.br (PTT.br) S\u00e3o Paulo: ATM/MPLA", "DE-CIX Marseille: DE-CIX Marseille Peering LAN", "UAE-IX: UAE-IX Peering LAN", "NetIX: NetIX", "DE-CIX Frankfurt: DE-CIX Frankfurt Peering LAN", "NL-ix: Main"], "website": "http://www.Airtel.in", "known_for": "India's largest telecom operator. 300M+ subscribers. Dominant mobile data ISP across Africa and South Asia. Open peering policy \u2014 present at IXs from Frankfurt to Johannesburg to S\u00e3o Paulo.", "holder": "BBIL-AP - BHARTI Airtel Ltd."}, "Vodafone": {"asns": [12430, 1273], "full_name": "Vodafone Espa\u00f1a", "type": "Cable/DSL/ISP", "traffic": "\u2014", "prefixes4": 4000, "prefixes6": 200, "scope": "Europe", "policy": "Selective", "ipv6": true, "ix_count": 5, "fac_count": 0, "ixs": [], "website": "http://www.vodafone.es", "known_for": "European mobile giant. Operates across 20+ countries. Selective peering. Known for consumer mobile broadband, 4G/5G rollout across Europe and Africa.", "holder": "VODAFONE_ES VODAFONE ESPANA S.A.U."}, "Orange": {"asns": [5511, 3215], "full_name": "Orange", "type": "NSP", "traffic": "50-100Tbps", "prefixes4": 250000, "prefixes6": 50000, "scope": "Global", "policy": "Restrictive", "ipv6": true, "ix_count": 2, "fac_count": 99, "ixs": ["LINX LON1: Main", "Equinix Singapore"], "website": "https://wholesale.orange.com/international/en/our-solutions/ip-content-distribution.html", "known_for": "France Telecom's global backbone. 50-100Tbps traffic volume. 250K+ IPv4 prefixes. One of the largest tier-1/tier-2 operators globally. Operates Opentransit backbone.", "holder": "Opentransit Orange S.A."}, "Claro": {"asns": [28573, 7303], "full_name": "Claro S.A. (NET)", "type": "Cable/DSL/ISP", "traffic": "10-20Tbps", "prefixes4": 0, "prefixes6": 0, "scope": "Regional", "policy": "Selective", "ipv6": true, "ix_count": 0, "fac_count": 0, "ixs": [], "website": "https://www.claro.com.br/", "known_for": "Am\u00e9rica M\u00f3vil subsidiary. Dominant cable/mobile ISP across Latin America. Operates in 20+ LatAm countries. Known for consumer broadband and enterprise services in Brazil, Mexico, Argentina.", "holder": "AS28573 - Claro NXT Telecomunicacoes Ltda"}, "Jio": {"asns": [55836], "full_name": "Reliance Jio Infocomm NLD Network", "type": "Cable/DSL/ISP", "traffic": "100+Tbps", "prefixes4": 15000, "prefixes6": 8000, "scope": "Asia Pacific", "policy": "Open", "ipv6": true, "ix_count": 0, "fac_count": 0, "ixs": [], "website": "http://www.jio.com", "known_for": "Reliance Industries' disruptive Indian telco. Launched 2016 with free 4G \u2014 reshaped Indian internet. 100+Tbps traffic. 400M+ subscribers. Pure 4G/5G, no legacy 2G/3G infrastructure.", "holder": "RELIANCEJIO-IN - Reliance Jio Infocomm Limited"}, "Vivo": {"asns": [26599], "full_name": "TELEF\u00d4NICA BRASIL AS26599", "type": "", "traffic": "\u2014", "prefixes4": 0, "prefixes6": 0, "scope": "Not Disclosed", "policy": "Open", "ipv6": true, "ix_count": 0, "fac_count": 0, "ixs": [], "website": "http://www.telefonica.com.br", "known_for": "Telef\u00f3nica Brasil \u2014 largest Brazilian telco. Consumer broadband and mobile. Operates as TELEF\u00d4NICA BRASIL. Known for fiber rollout in S\u00e3o Paulo metro.", "holder": "AS26599 - TELEFONICA BRASIL S.A"}, "Movistar": {"asns": [6147, 3352], "full_name": "Telefonica Del Per\u00fa", "type": "Cable/DSL/ISP", "traffic": "5-10Tbps", "prefixes4": 5000, "prefixes6": 1000, "scope": "South America", "policy": "Selective", "ipv6": true, "ix_count": 1, "fac_count": 1, "ixs": ["PIT - Peru - Lima: Main"], "website": "https://www.telefonica.com.pe/", "known_for": "Telef\u00f3nica LatAm brand. Covers Peru, Colombia, Chile, Ecuador, Venezuela. 5-10Tbps backbone. Selective peering. Present at PIT Peru IX.", "holder": "AS6147 - INTEGRATEL PERU S.A.A."}, "Verizon 5G Home Internet": {"asns": [701, 22394], "full_name": "Verizon", "type": "NSP", "traffic": "1-5Tbps", "prefixes4": 110000, "prefixes6": 25000, "scope": "Global", "policy": "Restrictive", "ipv6": true, "ix_count": 1, "fac_count": 19, "ixs": ["DRF IX"], "website": "https://www.verizon.com/business/", "known_for": "US tier-1 legacy backbone (former UUNET/MCI). 1-5Tbps. 110K+ IPv4 prefixes. Global scope. Consumer 5G Home broadband product built on mmWave infrastructure. Restrictive peering policy.", "holder": "UUNET - Verizon Business"}, "Telmex": {"asns": [8151], "full_name": "Uninet S.A. de C.V.", "type": "Network Services", "traffic": "\u2014", "prefixes4": 11983, "prefixes6": 452, "scope": "Not Disclosed", "policy": "Open", "ipv6": true, "ix_count": 0, "fac_count": 7, "ixs": [], "website": "http://telmex.com", "known_for": "Am\u00e9rica M\u00f3vil's Mexican telco. Dominant fixed-line ISP in Mexico. AS8151 (Uninet). 11K+ prefixes. Open peering policy. Known for DSL and fiber across Mexico.", "holder": "AS8151 - UNINET"}, "XFINITY": {"asns": [7922], "full_name": "Comcast", "type": "Cable/DSL/ISP", "traffic": "1-5Tbps", "prefixes4": 50000, "prefixes6": 20000, "scope": "North America", "policy": "Selective", "ipv6": true, "ix_count": 0, "fac_count": 27, "ixs": [], "website": "https://corporate.comcast.com/", "known_for": "Comcast Cable \u2014 largest US cable ISP. 1-5Tbps backbone. 50K IPv4 prefixes. North America scope. Selective peering, requires traffic ratio parity. Present in 27 facilities.", "holder": "COMCAST-7922 - Comcast Cable Communications, LLC"}};
+
+const ISP_LOGO_BASE = 'https://raw.githubusercontent.com/vdutts7/squircle/main/webp/';
+const ISP_LOGO_NAMES = {
+  'Airtel':'airtel','Vodafone':'vodafone','Orange':'orange','Claro':'claro',
+  'Jio':'jio','Vivo':'vivo','Movistar':'movistar',
+  'Verizon 5G Home Internet':'verizon','Telmex':'telmex','XFINITY':'xfinity'
+};
+
+const TIER_COLORS = ['#e8f6ff','#7ef0ff','#2080ff','#0d3a8c','#0a1830'];
+const TIER_GLOWS = [
+  '0 0 20px #e8f6ff,0 0 40px rgba(232,246,255,0.35)',
+  '0 0 16px #7ef0ff,0 0 30px rgba(126,240,255,0.3)',
+  '0 0 12px #2080ff,0 0 24px rgba(32,128,255,0.3)',
+  '0 0 6px #0d3a8c',
+  'none'
+];
+
+const MARKERS = [{"lat": 47.61, "lng": -122.33, "count": 6, "server": "Seattle, WA", "avg_dl": 166.0, "avg_ul": 187.4, "avg_ping": 35, "tier": 2, "isps": ["ProtonVPN", "PTCL DSL", "Airtel", "Netia", "Amazon"], "isp_counts": {"ProtonVPN": 1, "PTCL DSL": 1, "Airtel": 1, "Netia": 1, "Amazon": 1}}, {"lat": 45.52, "lng": -122.68, "count": 52, "server": "Portland, OR", "avg_dl": 202.9, "avg_ul": 103.4, "avg_ping": 25, "tier": 1, "isps": ["Deutsche Telekom", "Movistar", "Spectrum", "PLDT Home Fiber", "Vodafone"], "isp_counts": {"Deutsche Telekom": 3, "Movistar": 3, "Spectrum": 2, "PLDT Home Fiber": 2, "Vodafone": 2}}, {"lat": 37.34, "lng": -121.89, "count": 51, "server": "San Jose, CA", "avg_dl": 198.5, "avg_ul": 67.8, "avg_ping": 47, "tier": 2, "isps": ["XFINITY", "Vodafone", "Telmex", "M247", "iCloud Private Relay"], "isp_counts": {"XFINITY": 3, "Vodafone": 3, "Telmex": 3, "M247": 2, "iCloud Private Relay": 2}}, {"lat": 50.11, "lng": 8.68, "count": 2, "server": "Frankfurt", "avg_dl": 319.9, "avg_ul": 154.6, "avg_ping": 24, "tier": 1, "isps": ["Quix", "Purtel"], "isp_counts": {"Quix": 1, "Purtel": 1}}, {"lat": 32.78, "lng": -96.8, "count": 15, "server": "Dallas, TX", "avg_dl": 323.5, "avg_ul": 147.8, "avg_ping": 23, "tier": 1, "isps": ["AT&T Internet", "Verizon 5G Home Internet", "Verizon", "Frontier", "OpenDNS"], "isp_counts": {"AT&T Internet": 4, "Verizon 5G Home Internet": 4, "Verizon": 2, "Frontier": 1, "OpenDNS": 1}}, {"lat": 39.77, "lng": -86.16, "count": 34, "server": "Indianapolis, IN", "avg_dl": 287.0, "avg_ul": 117.8, "avg_ping": 74, "tier": 1, "isps": ["Elisa", "ByFly", "Digicel+", "Verizon 5G Home Internet", "Vodafone"], "isp_counts": {"Elisa": 2, "ByFly": 2, "Digicel+": 2, "Verizon 5G Home Internet": 2, "Vodafone": 2}}, {"lat": 42.36, "lng": -71.06, "count": 29, "server": "Boston, MA", "avg_dl": 118.9, "avg_ul": 81.7, "avg_ping": 41, "tier": 2, "isps": ["Zain", "SpaceX Starlink", "Syrian Telecom", "Vivo", "Amazon"], "isp_counts": {"Zain": 3, "SpaceX Starlink": 2, "Syrian Telecom": 2, "Vivo": 2, "Amazon": 1}}, {"lat": 39.95, "lng": -75.17, "count": 23, "server": "Philadelphia, PA", "avg_dl": 212.2, "avg_ul": 99.5, "avg_ping": 24, "tier": 1, "isps": ["Airtel", "Vivo", "Orange", "Kcell", "iCloud Private Relay"], "isp_counts": {"Airtel": 3, "Vivo": 2, "Orange": 2, "Kcell": 1, "iCloud Private Relay": 1}}, {"lat": -33.46, "lng": -70.65, "count": 2, "server": "Santiago", "avg_dl": 1037.5, "avg_ul": 0.0, "avg_ping": 11, "tier": 0, "isps": ["Entel"], "isp_counts": {"Entel": 2}}, {"lat": 59.33, "lng": 18.07, "count": 1, "server": "Stockholm", "avg_dl": 7.8, "avg_ul": 249.5, "avg_ping": 164, "tier": 4, "isps": ["Datacamp"], "isp_counts": {"Datacamp": 1}}, {"lat": -22.91, "lng": -43.17, "count": 1, "server": "Rio de Janeiro", "avg_dl": 769.7, "avg_ul": 796.2, "avg_ping": 2, "tier": 0, "isps": ["Wlinks"], "isp_counts": {"Wlinks": 1}}, {"lat": 41.88, "lng": -87.63, "count": 27, "server": "Chicago, IL", "avg_dl": 400.1, "avg_ul": 155.8, "avg_ping": 19, "tier": 1, "isps": ["Silknet", "Claro", "ByFly", "Vodafone", "Jio"], "isp_counts": {"Silknet": 2, "Claro": 2, "ByFly": 1, "Vodafone": 1, "Jio": 1}}, {"lat": 37.98, "lng": 23.73, "count": 5, "server": "Athens", "avg_dl": 110.4, "avg_ul": 0.0, "avg_ping": 21, "tier": 2, "isps": ["Nova", "FIBERGRID", "Vodafone", "Cosmote"], "isp_counts": {"Nova": 2, "FIBERGRID": 1, "Vodafone": 1, "Cosmote": 1}}, {"lat": 14.68, "lng": 121.04, "count": 1, "server": "Quezon City", "avg_dl": 72.2, "avg_ul": 22.0, "avg_ping": 13, "tier": 2, "isps": ["Smart"], "isp_counts": {"Smart": 1}}, {"lat": 33.45, "lng": -112.07, "count": 9, "server": "Phoenix, AZ", "avg_dl": 151.9, "avg_ul": 48.3, "avg_ping": 32, "tier": 2, "isps": ["MTN Irancell", "Mass Response", "Cox Business", "Entel", "Wyyerd Fiber"], "isp_counts": {"MTN Irancell": 2, "Mass Response": 1, "Cox Business": 1, "Entel": 1, "Wyyerd Fiber": 1}}, {"lat": -6.21, "lng": 106.85, "count": 4, "server": "Jakarta", "avg_dl": 181.5, "avg_ul": 119.3, "avg_ping": 19, "tier": 2, "isps": ["MyRepublic", "IM3 Ooredoo", "iCloud Private Relay"], "isp_counts": {"MyRepublic": 2, "IM3 Ooredoo": 1, "iCloud Private Relay": 1}}, {"lat": 4.71, "lng": -74.07, "count": 7, "server": "Bogot\u00e1", "avg_dl": 410.6, "avg_ul": 152.8, "avg_ping": 12, "tier": 1, "isps": ["Claro", "Movistar", "Tigo", "Giga Fibra"], "isp_counts": {"Claro": 3, "Movistar": 2, "Tigo": 1, "Giga Fibra": 1}}, {"lat": 35.23, "lng": -80.84, "count": 5, "server": "Charlotte, NC", "avg_dl": 307.5, "avg_ul": 53.9, "avg_ping": 54, "tier": 1, "isps": ["Virgin Media", "Spectrum", "Fiber Grid", "M247"], "isp_counts": {"Virgin Media": 2, "Spectrum": 1, "Fiber Grid": 1, "M247": 1}}, {"lat": 50.45, "lng": 30.52, "count": 2, "server": "Kyiv", "avg_dl": 89.1, "avg_ul": 7.1, "avg_ping": 12, "tier": 2, "isps": ["LuxLite", "lifecell"], "isp_counts": {"LuxLite": 1, "lifecell": 1}}, {"lat": 17.39, "lng": 78.47, "count": 3, "server": "Hyderabad", "avg_dl": 131.7, "avg_ul": 130.0, "avg_ping": 30, "tier": 2, "isps": ["Airtel", "DVPL"], "isp_counts": {"Airtel": 2, "DVPL": 1}}, {"lat": 39.1, "lng": -94.58, "count": 6, "server": "Kansas City, MO", "avg_dl": 203.6, "avg_ul": 25.9, "avg_ping": 26, "tier": 1, "isps": ["Cloudflare Warp", "GFiber", "Verizon", "CenturyLink", "Tigo"], "isp_counts": {"Cloudflare Warp": 1, "GFiber": 1, "Verizon": 1, "CenturyLink": 1, "Tigo": 1}}, {"lat": -27.47, "lng": 153.03, "count": 2, "server": "Brisbane", "avg_dl": 373.4, "avg_ul": 51.5, "avg_ping": 242, "tier": 1, "isps": ["Host Universal", "Aussie Broadband"], "isp_counts": {"Host Universal": 1, "Aussie Broadband": 1}}, {"lat": -34.6, "lng": -58.38, "count": 6, "server": "Buenos Aires", "avg_dl": 174.3, "avg_ul": 202.3, "avg_ping": 15, "tier": 2, "isps": ["Telecentro", "Claro", "Movistar", "Personal Fibra", "IPLAN"], "isp_counts": {"Telecentro": 2, "Claro": 1, "Movistar": 1, "Personal Fibra": 1, "IPLAN": 1}}, {"lat": 33.75, "lng": -84.39, "count": 14, "server": "Atlanta, GA", "avg_dl": 239.0, "avg_ul": 110.5, "avg_ping": 18, "tier": 1, "isps": ["Airtel", "Ultrawifi Smart Internet", "Cogent Communications", "Verizon", "SSServicios"], "isp_counts": {"Airtel": 2, "Ultrawifi Smart Internet": 1, "Cogent Communications": 1, "Verizon": 1, "SSServicios": 1}}, {"lat": 51.51, "lng": -0.13, "count": 8, "server": "London", "avg_dl": 285.6, "avg_ul": 64.0, "avg_ping": 43, "tier": 1, "isps": ["BT", "BRSK Ltd", "CFL"], "isp_counts": {"BT": 5, "BRSK Ltd": 2, "CFL": 1}}, {"lat": 39.74, "lng": -104.98, "count": 18, "server": "Denver, CO", "avg_dl": 333.0, "avg_ul": 191.8, "avg_ping": 24, "tier": 1, "isps": ["TELUS PureFibre", "Totalplay", "Telmex", "t2", "Movistar"], "isp_counts": {"TELUS PureFibre": 2, "Totalplay": 2, "Telmex": 2, "t2": 1, "Movistar": 1}}, {"lat": 52.37, "lng": 4.9, "count": 6, "server": "Amsterdam", "avg_dl": 71.4, "avg_ul": 33.6, "avg_ping": 83, "tier": 2, "isps": ["Ziggo", "KPN", "VDSina.com", "Cloudflare Warp", "WorldStream"], "isp_counts": {"Ziggo": 1, "KPN": 1, "VDSina.com": 1, "Cloudflare Warp": 1, "WorldStream": 1}}, {"lat": 18.52, "lng": 73.86, "count": 5, "server": "Pune", "avg_dl": 39.8, "avg_ul": 28.2, "avg_ping": 101, "tier": 3, "isps": ["Airtel"], "isp_counts": {"Airtel": 5}}, {"lat": 20.66, "lng": -103.35, "count": 1, "server": "Guadalajara", "avg_dl": 11.8, "avg_ul": 0.7, "avg_ping": 24, "tier": 3, "isps": ["Telmex"], "isp_counts": {"Telmex": 1}}, {"lat": 19.08, "lng": 72.88, "count": 3, "server": "Mumbai", "avg_dl": 31.4, "avg_ul": 16.1, "avg_ping": 21, "tier": 3, "isps": ["Airtel", "Jio", "JPR"], "isp_counts": {"Airtel": 1, "Jio": 1, "JPR": 1}}, {"lat": -1.29, "lng": 36.82, "count": 2, "server": "Nairobi", "avg_dl": 11.0, "avg_ul": 0.0, "avg_ping": 29, "tier": 3, "isps": ["Unwired Communications", "Safaricom"], "isp_counts": {"Unwired Communications": 1, "Safaricom": 1}}, {"lat": 41.01, "lng": 28.95, "count": 2, "server": "Istanbul", "avg_dl": 96.9, "avg_ul": 23.5, "avg_ping": 18, "tier": 2, "isps": ["Turkcell", "T\u00fcrk Telekom"], "isp_counts": {"Turkcell": 1, "T\u00fcrk Telekom": 1}}, {"lat": 42.33, "lng": -83.05, "count": 11, "server": "Detroit, MI", "avg_dl": 387.8, "avg_ul": 49.8, "avg_ping": 34, "tier": 1, "isps": ["T\u00fcrk Telekom", "Blue Stream Fiber", "Aljeel Aljadeed for Technology", "XFINITY", "Rogers"], "isp_counts": {"T\u00fcrk Telekom": 2, "Blue Stream Fiber": 1, "Aljeel Aljadeed for Technology": 1, "XFINITY": 1, "Rogers": 1}}, {"lat": 36.17, "lng": -115.14, "count": 8, "server": "Las Vegas, NV", "avg_dl": 348.3, "avg_ul": 87.5, "avg_ping": 47, "tier": 1, "isps": ["XFINITY", "T-Mobile", "CenturyLink", "Datacamp", "Cox"], "isp_counts": {"XFINITY": 2, "T-Mobile": 2, "CenturyLink": 1, "Datacamp": 1, "Cox": 1}}, {"lat": 36.17, "lng": -86.78, "count": 3, "server": "Nashville, TN", "avg_dl": 254.6, "avg_ul": 9.8, "avg_ping": 40, "tier": 1, "isps": ["Excitel", "AT&T Internet", "Jio"], "isp_counts": {"Excitel": 1, "AT&T Internet": 1, "Jio": 1}}, {"lat": 24.86, "lng": 67.01, "count": 4, "server": "Karachi", "avg_dl": 26.8, "avg_ul": 27.2, "avg_ping": 8, "tier": 3, "isps": ["Cybernet", "PTCL Flash Fiber", "Optix"], "isp_counts": {"Cybernet": 2, "PTCL Flash Fiber": 1, "Optix": 1}}, {"lat": 3.14, "lng": 101.69, "count": 2, "server": "Kuala Lumpur", "avg_dl": 298.6, "avg_ul": 0.0, "avg_ping": 24, "tier": 1, "isps": ["CelcomDigi", "U Mobile"], "isp_counts": {"CelcomDigi": 1, "U Mobile": 1}}, {"lat": 13.08, "lng": 80.27, "count": 6, "server": "Chennai", "avg_dl": 148.5, "avg_ul": 68.2, "avg_ping": 10, "tier": 2, "isps": ["Airtel", "K-Net", "Netskope"], "isp_counts": {"Airtel": 3, "K-Net": 2, "Netskope": 1}}, {"lat": 44.43, "lng": 26.1, "count": 1, "server": "Bucharest", "avg_dl": 15.1, "avg_ul": 3.4, "avg_ping": 31, "tier": 3, "isps": ["Digi"], "isp_counts": {"Digi": 1}}, {"lat": 28.63, "lng": 77.22, "count": 4, "server": "Delhi", "avg_dl": 123.3, "avg_ul": 32.6, "avg_ping": 5, "tier": 2, "isps": ["Zscaler", "World Fibernet", "ACT", "Excitel"], "isp_counts": {"Zscaler": 1, "World Fibernet": 1, "ACT": 1, "Excitel": 1}}, {"lat": 47.5, "lng": 19.05, "count": 1, "server": "Budapest", "avg_dl": 6.8, "avg_ul": 6.5, "avg_ping": 14, "tier": 4, "isps": ["Invitech"], "isp_counts": {"Invitech": 1}}, {"lat": 22.57, "lng": 88.36, "count": 3, "server": "Kolkata", "avg_dl": 69.3, "avg_ul": 53.4, "avg_ping": 9, "tier": 2, "isps": ["A S C S C Digital", "Alliance Broadband", "Jio"], "isp_counts": {"A S C S C Digital": 1, "Alliance Broadband": 1, "Jio": 1}}, {"lat": 48.21, "lng": 16.37, "count": 2, "server": "Vienna", "avg_dl": 100.4, "avg_ul": 7.0, "avg_ping": 31, "tier": 2, "isps": ["iCloud Private Relay"], "isp_counts": {"iCloud Private Relay": 1}}, {"lat": 6.52, "lng": 3.38, "count": 1, "server": "Lagos", "avg_dl": 47.7, "avg_ul": 0.0, "avg_ping": 42, "tier": 3, "isps": ["Airtel"], "isp_counts": {"Airtel": 1}}, {"lat": -26.2, "lng": 28.04, "count": 1, "server": "Johannesburg", "avg_dl": 11.0, "avg_ul": 0.4, "avg_ping": 55, "tier": 3, "isps": ["Vodacom Business"], "isp_counts": {"Vodacom Business": 1}}, {"lat": 40.71, "lng": -74.01, "count": 1, "server": "New York, NY", "avg_dl": 107.6, "avg_ul": 0.0, "avg_ping": 4, "tier": 2, "isps": ["DTC Cable"], "isp_counts": {"DTC Cable": 1}}, {"lat": 41.39, "lng": 2.15, "count": 1, "server": "Barcelona", "avg_dl": 66.0, "avg_ul": 113.8, "avg_ping": 5, "tier": 2, "isps": ["Vodafone"], "isp_counts": {"Vodafone": 1}}, {"lat": 41.9, "lng": 12.5, "count": 1, "server": "Rome", "avg_dl": 754.8, "avg_ul": 516.1, "avg_ping": 3, "tier": 0, "isps": ["Vodafone"], "isp_counts": {"Vodafone": 1}}];
+
+// ── MAP INIT ─────────────────────────────────────────────────────────────────
+const map = L.map('map', {zoomControl:true, attributionControl:true}).setView([20,10],2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'© OpenStreetMap © CARTO', maxZoom:19, subdomains:'abcd'
+}).addTo(map);
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let activeFilter = null;
+const leafletMarkers = [];
+const maxCount = Math.max(...MARKERS.map(m => m.count));
+
+// ── ICON BUILDER ─────────────────────────────────────────────────────────────
+function buildIcon(m, faded) {
+  const c = TIER_COLORS[m.tier];
+  const size = Math.max(12, Math.min(32, 8 + (m.count / maxCount) * 26));
+  const total = size + 18;
+  const op = faded ? 0.07 : 1;
+  const glow = faded ? 'none' : TIER_GLOWS[m.tier];
+  const ring = faded ? '' : '<div class="pr" style="color:' + c + '"></div>';
+  const label = m.count > 1 ? m.count : '';
+  const html = '<div style="position:relative;width:' + total + 'px;height:' + total + 'px;'
+    + 'display:flex;align-items:center;justify-content:center;'
+    + 'opacity:' + op + ';transition:opacity 0.2s;">'
+    + ring
+    + '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;'
+    + 'background:' + c + ';border:1.5px solid rgba(255,255,255,0.75);'
+    + 'box-shadow:' + glow + ';position:relative;z-index:1;'
+    + 'display:flex;align-items:center;justify-content:center;'
+    + 'font-family:Bebas Neue,sans-serif;font-size:' + (size > 18 ? 10 : 8) + 'px;'
+    + 'color:rgba(0,0,0,0.85);">' + label + '</div></div>';
+  return L.divIcon({
+    className: '',
+    html: html,
+    iconSize: [total, total],
+    iconAnchor: [total/2, total/2],
+    popupAnchor: [0, -total/2]
+  });
+}
+
+// ── POPUP BUILDER ─────────────────────────────────────────────────────────────
+function buildPopup(m) {
+  const c = TIER_COLORS[m.tier];
+  const glow = TIER_GLOWS[m.tier];
+  const counts = m.isp_counts || {};
+
+  // ISP footer - changes based on active filter
+  let ispFooter = '';
+  if (activeFilter && activeFilter.type === 'isp') {
+    const filterIsp = activeFilter.value;
+    const n = counts[filterIsp] || 0;
+    if (n > 0) {
+      const pct = Math.round(n / m.count * 100);
+      const logoKey = ISP_LOGO_NAMES[filterIsp];
+      const img = logoKey
+        ? '<img src="' + ISP_LOGO_BASE + logoKey + '.webp" '
+          + 'style="width:14px;height:14px;border-radius:3px;object-fit:cover;'
+          + 'vertical-align:middle;margin-right:4px;" onerror="this.remove()">'
+        : '';
+      ispFooter = '<div style="background:rgba(126,240,255,0.12);border:1px solid #7ef0ff;'
+        + 'border-radius:6px;padding:6px 8px;margin-top:8px;">'
+        + '<div style="font-size:9px;color:#7ef0ff;letter-spacing:2px;margin-bottom:4px;">FILTER MATCH</div>'
+        + '<div style="display:flex;align-items:center;font-size:11px;color:#d0e4ff;">'
+        + img + filterIsp
+        + '<span style="margin-left:8px;color:#7ef0ff;font-family:Bebas Neue,sans-serif;font-size:13px;">'
+        + n + (n===1?' result':' results') + '</span>'
+        + '<span style="margin-left:6px;font-size:10px;color:#6888b0;">(' + pct + '% of ' + m.count + ')</span>'
+        + '</div></div>';
+    }
+  } else {
+    // Show top ISPs with counts
+    const topIsps = Object.entries(counts)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0,4);
+    if (topIsps.length) {
+      ispFooter = '<div style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(32,128,255,0.15);'
+        + 'display:flex;flex-wrap:wrap;gap:5px;">';
+      topIsps.forEach(([isp, n]) => {
+        const k = ISP_LOGO_NAMES[isp];
+        const img = k
+          ? '<img src="' + ISP_LOGO_BASE + k + '.webp" '
+            + 'style="width:13px;height:13px;border-radius:3px;object-fit:cover;" onerror="this.remove()">'
+          : '';
+        ispFooter += '<span style="display:inline-flex;align-items:center;gap:3px;'
+          + 'font-size:10px;color:#99b8e0;">' + img + isp
+          + '<span style="color:#6888b0;">×' + n + '</span></span>';
+      });
+      ispFooter += '</div>';
+    }
+  }
+
+  return '<div style="font-family:Share Tech Mono,monospace;min-width:200px;">'
+    + '<div style="font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:2px;'
+    + 'color:#d0e4ff;margin-bottom:3px;text-shadow:0 0 16px ' + c + ';">'
+    + m.server + '</div>'
+    + '<div style="font-size:11px;color:#7a9cc0;margin-bottom:10px;letter-spacing:1px;">'
+    + m.count + (m.count===1?' RESULT':' RESULTS') + ' SAMPLED</div>'
+    + '<table style="width:100%;font-size:12px;border-collapse:collapse;">'
+    + '<tr><td style="color:#7a9cc0;padding:3px 0;">↓ AVG DOWNLOAD</td>'
+    + '<td style="font-family:Bebas Neue,sans-serif;font-size:16px;color:' + c
+    + ';text-align:right;text-shadow:' + glow + ';">' + m.avg_dl + ' Mbps</td></tr>'
+    + '<tr><td style="color:#7a9cc0;padding:3px 0;">↑ AVG UPLOAD</td>'
+    + '<td style="font-family:Bebas Neue,sans-serif;font-size:16px;color:#2080ff;text-align:right;">'
+    + m.avg_ul + ' Mbps</td></tr>'
+    + '<tr><td style="color:#7a9cc0;padding:3px 0;">⚡ AVG PING</td>'
+    + '<td style="font-family:Bebas Neue,sans-serif;font-size:16px;color:#7ef0ff;text-align:right;">'
+    + m.avg_ping + ' ms</td></tr>'
+    + '</table>'
+    + ispFooter
+    + '</div>';
+}
+
+// ── PLOT MARKERS ──────────────────────────────────────────────────────────────
+MARKERS.forEach(function(m) {
+  const lm = L.marker([m.lat, m.lng], {icon: buildIcon(m, false)})
+    .addTo(map)
+    .bindPopup(buildPopup(m), {maxWidth: 290});
+  lm._mdata = m;
+  leafletMarkers.push(lm);
+});
+
+// ── FILTER ENGINE ─────────────────────────────────────────────────────────────
+function applyFilter() {
+  leafletMarkers.forEach(function(lm) {
+    const m = lm._mdata;
+    let show = true;
+    if (activeFilter) {
+      if (activeFilter.type === 'tier') {
+        show = (m.tier === activeFilter.value);
+      } else if (activeFilter.type === 'isp') {
+        const counts = m.isp_counts || {};
+        show = (counts[activeFilter.value] != null && counts[activeFilter.value] > 0);
+      }
+    }
+    lm.setIcon(buildIcon(m, !show));
+    lm.setPopupContent(buildPopup(m));
+  });
+  const pill = document.getElementById('filter-pill');
+  if (pill) pill.classList.toggle('visible', !!activeFilter);
+}
+
+function filterTier(tier) {
+  if (activeFilter && activeFilter.type === 'tier' && activeFilter.value === tier) {
+    clearFilter(); return;
+  }
+  document.querySelectorAll('.sp-row').forEach(function(r) { r.classList.remove('active'); });
+  const row = document.querySelector('.sp-row[data-tier="' + tier + '"]');
+  if (row) row.classList.add('active');
+  document.querySelectorAll('.isp-row').forEach(function(r) { r.classList.remove('active'); });
+  activeFilter = {type: 'tier', value: tier};
+  applyFilter();
+  document.getElementById('isp-panel').classList.remove('open');
+}
+
+function filterISP(isp, el) {
+  if (activeFilter && activeFilter.type === 'isp' && activeFilter.value === isp) {
+    clearFilter(); return;
+  }
+  document.querySelectorAll('.isp-row').forEach(function(r) { r.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.sp-row').forEach(function(r) { r.classList.remove('active'); });
+  activeFilter = {type: 'isp', value: isp};
+  applyFilter();
+  openISPPanel(isp);
+}
+
+function clearFilter() {
+  activeFilter = null;
+  document.querySelectorAll('.sp-row, .isp-row').forEach(function(r) { r.classList.remove('active'); });
+  document.getElementById('isp-panel').classList.remove('open');
+  applyFilter();
+}
+
+// ── ISP PANEL ─────────────────────────────────────────────────────────────────
+function openISPPanel(ispName) {
+  const d = ISP_REGISTRY[ispName];
+  if (!d) return;
+  const logoKey = ISP_LOGO_NAMES[ispName] || ispName.toLowerCase().replace(/[^a-z]/g,'');
+
+  document.getElementById('panel-name').innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;">'
+    + '<img src="' + ISP_LOGO_BASE + logoKey + '.webp" '
+    + 'style="width:36px;height:36px;border-radius:9px;object-fit:cover;border:1px solid rgba(40,120,255,0.2);" '
+    + 'onerror="this.remove()">'
+    + '<span>' + ispName + '</span></div>';
+
+  document.getElementById('panel-full').textContent = d.full_name || '';
+  document.getElementById('panel-known').textContent = d.known_for || '';
+  document.getElementById('panel-asns').innerHTML =
+    (d.asns||[]).map(function(a) {
+      return '<span class="isp-asn-badge">AS' + a + '</span>';
+    }).join(' ');
+
+  const policy = d.policy || '';
+  const pClass = policy==='Open' ? 'policy-open'
+    : policy==='Restrictive' ? 'policy-restrictive' : 'policy-selective';
+
+  let ixExtra = '';
+  if (d.ixs && d.ixs.length) {
+    ixExtra = '<div class="ix-list">'
+      + d.ixs.slice(0,6).map(function(ix) {
+          return '<span class="ix-tag">' + ix.split(':')[0] + '</span>';
+        }).join('') + '</div>';
+  }
+
+  const stats = [
+    {label:'TRAFFIC VOLUME', val: d.traffic||'-', sub:'backbone estimate'},
+    {label:'IPv4 PREFIXES',  val: (d.prefixes4||0).toLocaleString(), sub:'announced routes'},
+    {label:'IPv6 PREFIXES',  val: (d.prefixes6||0).toLocaleString(), sub: d.ipv6?'IPv6 enabled':'IPv6 unknown'},
+    {label:'SCOPE',          val: d.scope||'-', sub:'geographic coverage'},
+    {label:'PEERING POLICY', val: '<span class="policy-badge ' + pClass + '">' + (policy||'-') + '</span>', raw:true, sub:'BGP peer stance'},
+    {label:'IX PRESENCE',    val: String(d.ix_count||0), sub: (d.ixs&&d.ixs.length ? null : (d.ix_count||0)+' exchanges'), extra: ixExtra},
+    {label:'FACILITIES',     val: String(d.fac_count||0), sub:'data centers'},
+    {label:'TYPE',           val: d.type||'ISP', sub:'PeeringDB classification'},
+  ];
+
+  document.getElementById('panel-stats').innerHTML = stats.map(function(s) {
+    return '<div class="stat-block">'
+      + '<div class="stat-label">' + s.label + '</div>'
+      + '<div class="stat-val">' + s.val + '</div>'
+      + (s.sub ? '<div class="stat-sub">' + s.sub + '</div>' : '')
+      + (s.extra || '')
+      + '</div>';
+  }).join('');
+
+  document.getElementById('isp-panel').classList.add('open');
+}
+
+function closeISPPanel() {
+  document.getElementById('isp-panel').classList.remove('open');
+  document.querySelectorAll('.isp-row').forEach(function(r) { r.classList.remove('active'); });
+  activeFilter = null;
+  applyFilter();
+}
+</script>
+
+<div id="isp-panel">
+  <button class="isp-panel-close" onclick="closeISPPanel()">✕</button>
+  <div class="isp-panel-inner">
+    <div class="isp-panel-hero">
+      <img id="panel-logo" class="isp-panel-logo" src="" onerror="this.style.display='none'">
+      <div id="panel-name" class="isp-panel-name"></div>
+      <div id="panel-full" class="isp-panel-full"></div>
+      <div id="panel-asns" class="isp-asn-badges"></div>
+      <div id="panel-known" class="isp-known"></div>
+    </div>
+    <div class="isp-panel-stats" id="panel-stats"></div>
+  </div>
+</div>
+
+
+
+
+<canvas id="electric-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:350;pointer-events:none;mix-blend-mode:screen;"></canvas>
+
+<script>
+(function() {
+  var canvas = document.getElementById('electric-canvas');
+  var ctx = canvas.getContext('2d');
+  var paths = [];
+  var particles = [];
+  var dirty = true;
+  var NPARTICLES = 60;
+  var COLORS = ['#ffffff','#7ef0ff','#7ef0ff','#2080ff','#4ab8ff','#7ef0ff'];
+
+  // ── resize: set canvas pixel size, NO accumulated scale ──────────────────
+  function resize() {
+    var w = canvas.offsetWidth, h = canvas.offsetHeight;
+    canvas.width  = w;
+    canvas.height = h;
+    dirty = true;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  map.on('resize', resize);
+  map.on('move zoom moveend zoomend', function() { dirty = true; });
+
+  // ── project lat/lng to canvas pixel (canvas == map container) ────────────
+  function px(ll) {
+    var p = map.latLngToContainerPoint(ll);
+    return [p.x, p.y];
+  }
+
+  // ── reproject all stored paths ────────────────────────────────────────────
+  var projPaths = [];
+  function reproject() {
+    projPaths = paths.map(function(path) {
+      return path.map(px);
+    });
+    dirty = false;
+  }
+
+  // ── particle factory ──────────────────────────────────────────────────────
+  function spawn(i) {
+    if (!paths.length) return null;
+    var isBurst = Math.random() < 0.15;
+    return {
+      pi:    Math.floor(Math.random() * paths.length),
+      pos:   Math.random(),
+      dir:   Math.random() > 0.5 ? 1 : -1,
+      speed: isBurst ? 0.008 + Math.random()*0.006 : 0.001 + Math.random()*0.003,
+      alpha: isBurst ? 1 : 0.4 + Math.random()*0.5,
+      size:  isBurst ? 3 : 1 + Math.random()*1.5,
+      trail: 0.05 + Math.random()*0.12,
+      color: isBurst ? '#ffffff' : COLORS[Math.floor(Math.random()*COLORS.length)]
+    };
+  }
+
+  // ── draw single particle ──────────────────────────────────────────────────
+  function drawParticle(p) {
+    var pp = projPaths[p.pi];
+    if (!pp || pp.length < 2) return;
+    var n   = pp.length;
+    var hi  = Math.floor(p.pos * (n - 1));
+    if (hi < 1 || hi >= n) return;
+
+    var trailLen = Math.max(2, Math.floor(p.trail * n));
+    var si = Math.max(0, hi - trailLen);
+
+    // trail
+    ctx.beginPath();
+    ctx.moveTo(pp[si][0], pp[si][1]);
+    for (var i = si+1; i <= hi; i++) ctx.lineTo(pp[i][0], pp[i][1]);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.size * 0.6;
+    ctx.globalAlpha = p.alpha * 0.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = p.color;
+    ctx.stroke();
+
+    // head
+    var hx = pp[hi][0], hy = pp[hi][1];
+    ctx.beginPath();
+    ctx.arc(hx, hy, p.size * 2, 0, Math.PI*2);
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = p.alpha * 0.95;
+    ctx.shadowBlur = p.size * 10;
+    ctx.shadowColor = p.color;
+    ctx.fill();
+
+    // outer glow
+    ctx.beginPath();
+    ctx.arc(hx, hy, p.size * 6, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.alpha * 0.12;
+    ctx.shadowBlur = 0;
+    ctx.fill();
+  }
+
+  // ── main animation loop ───────────────────────────────────────────────────
+  function animate() {
+    requestAnimationFrame(animate);
+    if (!projPaths.length) return;
+    if (dirty) reproject();
+
+    var W = canvas.offsetWidth, H = canvas.offsetHeight;
+    ctx.clearRect(0, 0, W, H);
+
+    // faint base coastline
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#1a4080';
+    ctx.lineWidth = 0.5;
+    for (var pi = 0; pi < projPaths.length; pi += 3) {
+      var pp = projPaths[pi];
+      if (pp.length < 2) continue;
+      ctx.beginPath();
+      ctx.globalAlpha = 0.08;
+      ctx.moveTo(pp[0][0], pp[0][1]);
+      for (var j = 2; j < pp.length; j += 2) ctx.lineTo(pp[j][0], pp[j][1]);
+      ctx.stroke();
+    }
+
+    // particles
+    for (var k = 0; k < particles.length; k++) {
+      var p = particles[k];
+      if (!p) { particles[k] = spawn(); continue; }
+      p.pos += p.speed * p.dir;
+      if (p.pos > 1 || p.pos < 0) { particles[k] = spawn(); continue; }
+      ctx.globalAlpha = 1;
+      drawParticle(p);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // ── load world topology and extract coastline rings ───────────────────────
+  fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+    .then(function(r) { return r.json(); })
+    .then(function(topo) {
+      // topojson.feature gives us individual country features with Polygon/MultiPolygon geometry
+      var fc = topojson.feature(topo, topo.objects.countries);
+      fc.features.forEach(function(feat) {
+        var geom = feat.geometry;
+        if (!geom) return;
+        function addRing(ring) {
+          if (ring.length < 4) return;
+          var lls = [];
+          // sample every 2nd point to reduce load
+          for (var i = 0; i < ring.length; i += 2) {
+            lls.push(L.latLng(ring[i][1], ring[i][0]));
+          }
+          if (lls.length >= 2) paths.push(lls);
+        }
+        if (geom.type === 'Polygon') {
+          geom.coordinates.forEach(addRing);
+        } else if (geom.type === 'MultiPolygon') {
+          geom.coordinates.forEach(function(poly) { poly.forEach(addRing); });
+        }
+      });
+
+      // seed particles
+      for (var i = 0; i < NPARTICLES; i++) {
+        var p = spawn();
+        if (p) particles.push(p);
+      }
+      dirty = true;
+      animate();
+    })
+    .catch(function(e) { console.warn('Electric overlay error:', e); });
+})();
+</script>
+</body>
+</html>
