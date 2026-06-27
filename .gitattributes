@@ -1,0 +1,7 @@
+# Encrypt all tracked files under data/ (current and future)
+data/** filter=git-crypt diff=git-crypt
+data/* filter=git-crypt diff=git-crypt
+# Mandatory plaintext (required for clone/unlock)
+.gitattributes -filter -diff
+.gitignore     -filter -diff
+.gitmodules    -filter -diff
