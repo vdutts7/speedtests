@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/speedtest.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/ookla-speedtest.webp" alt="logo" width="80" height="80" />
 </p>
 <h1 align="center">speedtests</h1>
 <p align="center"><em>crawl public speedtest result pages → ISP intelligence map</em></p>
