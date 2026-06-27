@@ -3,6 +3,10 @@
   <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/xfinity.webp" alt="logo" width="80" height="80" />
   <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/airtel.webp" alt="logo" width="80" height="80" />
   <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/verizon.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/orange.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/vodafone.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/movistar.webp" alt="logo" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/telmex.webp" alt="logo" width="80" height="80" />
 </p>
 <h1 align="center">speedtests</h1>
 <p align="center"><em>crawl public speedtest result pages → ISP intelligence map</em></p>
