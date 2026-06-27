@@ -10,14 +10,19 @@
 </p>
 <h1 align="center">speedtests</h1>
 <p align="center"><em>crawl public speedtest result pages → ISP intelligence map</em></p>
+<p align="center">https://vdutts7.github.io/speedtests</p>
+
 
 ---
 
-![preview](https://res.cloudinary.com/ddyc1es5v/image/upload/v1782552753/gh-repos/speedtests/speedtests-preview.webp)
+<table>
+<tr>
+<td align="left"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1782552753/gh-repos/speedtests/speedtests-preview.webp" alt="map preview" width="480" /></td>
+<td align="left"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1782554630/gh-repos/speedtests/speedtests-demo.gif" alt="screen recording" width="480" /></td>
+</tr>
+</table>
 
 ## Issue
-
-public [speedtest.net](https://www.speedtest.net) result pages embed `window.OOKLA.INIT_DATA` JSON with no auth
 
 result IDs opaque; no bulk export API
 
@@ -26,6 +31,10 @@ result IDs opaque; no bulk export API
 ❌ third-party datasets: stale, licensed, or missing server/latency fields you need
 
 ❌ naive crawl: 403/rate limits on sequential IDs; gaps without checkpoint/resume
+
+## Realization
+
+public [speedtest.net](https://www.speedtest.net) result pages embed `window.OOKLA.INIT_DATA` JSON with **no auth**
 
 ## How it works
 
